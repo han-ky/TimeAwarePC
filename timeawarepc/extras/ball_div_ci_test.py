@@ -1,27 +1,43 @@
-def ci_test_ball_div(data,A,B,S,**kwargs):
-    from scipy.stats import iqr
-    import numpy as np
-    from scipy.spatial.distance import cdist
+import numpy as np
+from scipy.stats import iqr
+from scipy.spatial.distance import cdist
 
-    niter = 500
+def ci_test_ball_div(data, A, B, S, niter=500):
+    """
+    Conditional independence test based on the conditional ball divergence (cBD),
+    calibrated via the local wild bootstrap.
+ 
+    Reference: Banerjee, Bhattacharya & Ghosh (2024),
+    "A Ball Divergence Based Measure For Conditional Independence Testing."
+ 
+    Parameters
+    ----------
+    data : np.ndarray, shape (n, p)
+        Data matrix; rows are observations, columns are variables.
+    A : int
+        Column index of X (the tested variable).
+    B : int
+        Column index of Y (the other tested variable).
+    S : set of int
+        Column index/indices of Z (the conditioning set).
+ 
+    Returns
+    -------
+    pval : float
+        Bootstrap p-value for H0: X _||_ Y | Z.
+    """
 
     n = data.shape[0]
-    p = data.shape[1]
-
-    idx = np.zeros(p, dtype=bool)
-    for i in range(p):
-        if i in S:
-            idx[i] = True
-
-    X = data[:,A]
-    Y = data[:,B]
-    Z = data[:,idx]
 
     dX = 1
     dY = 1
-    dZ = np.sum(idx)
+    dZ = len(S)
 
-    iqrZ = iqr(Z, axis = 0) #choice described in section 5 of Banerjee  
+    X = data[:, A].reshape(-1, dX)
+    Y = data[:, B].reshape(-1, dY)
+    Z = data[:, sorted(S)]
+
+    iqrZ = iqr(Z, axis=0) #choice described in section 5 of Banerjee  
     iqrY = iqr(Y)
     c1 = np.mean(np.append(iqrZ, iqrY))
     c2 = np.mean(iqrZ)
@@ -31,31 +47,40 @@ def ci_test_ball_div(data,A,B,S,**kwargs):
     h0 = 20 * c2 * n ** (-1 / 1.95)
 
     def epank(x):
-        return 0.75 * (1 - x ** 2) * (np.abs(x) <= 1)
+        return 0.75 * (1.0 - x ** 2) * (np.abs(x) <= 1.0)
     
-    YZ = np.hstack((Y.reshape(-1,1), Z))
-    distYZ = cdist(YZ, YZ, 'euclidean')
-    distZ = cdist(Z, Z, 'euclidean')
+    YZ = np.hstack((Y, Z))
+    distYZ = cdist(YZ, YZ)
+    distZ = cdist(Z, Z)
 
     wyz = epank(distYZ / h1)
     wz = epank(distZ / h2)
-    wyz_sum = np.sum(wyz, axis = 0)
-    wz_sum = np.sum(wz, axis = 0)
-    wyz_norm = wyz / wyz_sum
-    wz_norm = wz / wz_sum
+    colsum_wyz = np.maximum(wyz.sum(axis=0), 1e-300) #guard against div by zero
+    colsum_wz = np.maximum(wz.sum(axis=0), 1e-300) #guard against div by zero
+    wyz_norm = wyz / colsum_wyz
+    wz_norm = wz / colsum_wz
 
-    def calc_zeta_hat(X, wyz_norm, wz_norm):
-        
+    wdiff = wyz_norm - wz_norm
+    wyz_outer = np.expand_dims(wyz_norm, axis=1) * np.expand_dims(wyz_norm, axis=0)
+    wz_outer = np.expand_dims(wz_norm, axis=1) * np.expand_dims(wz_norm, axis=0)
+    w_outer = wyz_outer + wz_outer
+
+    def calc_zeta_hat(X_vals):
+        distX = cdist(X_vals, X_vals)
+        delta = np.expand_dims(distX, axis=1) <= np.expand_dims(distX, axis=-1)
+        inner = np.einsum('uvr,rs->uvs', delta, wdiff)
+        G_uvs = inner ** 2
+        result = np.sum(G_uvs * w_outer) / n # take weight function a(.,.) = 1 constant per D.2 of Banerjee paper supplementary material
         return result
-    
-    zeta_hat = calc_zeta_hat(X, wyz_norm, wz_norm)
+
+    zeta_hat = calc_zeta_hat(X)
 
     zeta_bootstrap = np.zeros(niter)
+    rng = np.random.default_rng()
     for i in range(niter):
-        rng = np.random.default_rng()
-        Xhat = rng.normal(loc = X, scale = h0**2)
-        zeta_bootstrap[i] = calc_zeta_hat(Xhat, wyz_norm, wz_norm)
+        X_perturb = rng.normal(loc=X, scale=h0)
+        zeta_bootstrap[i] = calc_zeta_hat(X_perturb)
 
-    pval = (1 + np.sum(zeta_bootstrap >= zeta_hat)) / (1 + niter)
+    pval = (1.0 + np.sum(zeta_bootstrap >= zeta_hat)) / (1.0 + niter)
 
     return pval

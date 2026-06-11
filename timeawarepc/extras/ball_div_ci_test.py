@@ -1,6 +1,13 @@
 import numpy as np
 from scipy.stats import iqr
 from scipy.spatial.distance import cdist
+from dcor.independence import distance_covariance_test
+from timeawarepc import simulate_data
+
+def i_test_cond_ball_div_uncond_dist_cov(data, A, B, S, niter=500):
+    if len(S) == 0:
+        return distance_covariance_test(data[:, A], data[:, B], num_resamples=niter).pvalue
+    return ci_test_ball_div(data, A, B, S, niter=niter)
 
 def ci_test_ball_div(data, A, B, S, niter=500):
     """
@@ -68,19 +75,31 @@ def ci_test_ball_div(data, A, B, S, niter=500):
     def calc_zeta_hat(X_vals):
         distX = cdist(X_vals, X_vals)
         delta = np.expand_dims(distX, axis=1) <= np.expand_dims(distX, axis=-1)
-        inner = np.einsum('uvr,rs->uvs', delta, wdiff)
-        G_uvs = inner ** 2
-        result = np.sum(G_uvs * w_outer) / n # take weight function a(.,.) = 1 constant per D.2 of Banerjee paper supplementary material
+        inner = np.matmul(delta.reshape(-1, n), wdiff).reshape(n, n, n) # same as np.matmul(delta, wdiff), reshape first to speed up matmul
+        result = np.einsum('uvs,uvs,uvs->', inner, inner, w_outer) / n # take weight function a(.,.) = 1 constant per D.2 of Banerjee paper supplementary material
         return result
 
     zeta_hat = calc_zeta_hat(X)
 
-    zeta_bootstrap = np.zeros(niter)
+    zeta_bootstrap = np.empty(niter)
     rng = np.random.default_rng()
+    
     for i in range(niter):
-        X_perturb = rng.normal(loc=X, scale=h0)
-        zeta_bootstrap[i] = calc_zeta_hat(X_perturb)
+       X_perturb = rng.normal(loc=X, scale=h0)
+       zeta_bootstrap[i] = calc_zeta_hat(X_perturb)
 
     pval = (1.0 + np.sum(zeta_bootstrap >= zeta_hat)) / (1.0 + niter)
 
     return pval
+
+def main():
+    print('Testing ball divergence CI test...')
+    model = 'lingauss'
+    T = 100
+    noise = 1
+    data, CFCtruth = simulate_data.simulate_data(model, T, noise)
+    test = i_test_cond_ball_div_uncond_dist_cov(data, 0, 2, {1,3}, niter=1000)
+    print(test)
+
+if __name__ == "__main__":
+    main()

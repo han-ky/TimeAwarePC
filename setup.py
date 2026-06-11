@@ -21,7 +21,8 @@ setuptools.setup(
         'pandas',
         'rpy2==3.5.11',
         'networkx',
-        'scipy'
+        'scipy',
+        'dcor'
     ],
     python_requires='>=3.7, <3.11',
     classifiers=[

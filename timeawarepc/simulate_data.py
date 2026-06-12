@@ -30,11 +30,11 @@ def simulate_data(model, T = 1000, noise = 1):
         for iter1 in range(n_neurons):
             smspikes[iter1,0]=rng.normal(scale=noise)
         for t in range(1,T):
-            smspikes[0,t]=rng.normal(scale=noise)+1
-            smspikes[1,t]=rng.normal(scale=noise)-1
-            smspikes[2,t]=2*np.sum(smspikes[0,np.max((t-lag,0)):t])+np.sum(smspikes[1,np.max((t-lag,0)):t])+rng.normal(scale=noise)
-            smspikes[3,t]=2*np.sum(smspikes[2,np.max((t-lag,0)):t])+rng.normal(scale=noise)
-        CFCtruth[0,2]=CFCtruth[1,2]=CFCtruth[2,3]=1
+            smspikes[0,t]=0.8*np.sum(smspikes[0,np.max((t-lag,0)):t])+rng.normal(scale=noise)
+            smspikes[1,t]=0.8*np.sum(smspikes[0,np.max((t-lag,0)):t])+rng.normal(scale=noise)
+            smspikes[2,t]=0.8*np.sum(smspikes[1,np.max((t-lag,0)):t])+rng.normal(scale=noise)
+            smspikes[3,t]=0.8*np.sum(smspikes[2,np.max((t-lag,0)):t])+rng.normal(scale=noise)
+        CFCtruth[0,1]=CFCtruth[1,2]=CFCtruth[2,3]=CFCtruth[0,0]=1
     elif model == "nonlinnongauss":
         smspikes=np.zeros((n_neurons,T))
         lag=1
@@ -44,8 +44,8 @@ def simulate_data(model, T = 1000, noise = 1):
             smspikes[0,t]=np.random.uniform(high = noise)
             smspikes[1,t]=np.random.uniform(high = noise)
             smspikes[2,t]=4*np.sum(np.sin(smspikes[0,np.max((t-lag,0)):t]))+3*np.sum(np.sin(smspikes[1,np.max((t-lag,0)):t]))+np.random.uniform(high = noise)
-            smspikes[3,t]=3*np.sum(np.sin(smspikes[2,np.max((t-lag,0)):t]))+np.random.uniform(high = noise)
-        CFCtruth[0,2]=CFCtruth[1,2]=CFCtruth[2,3]=1
+            smspikes[3,t]=2*np.sum(smspikes[1,np.max((t-lag,0)):t])+3*np.sum(np.sin(smspikes[2,np.max((t-lag,0)):t]))+np.random.uniform(high = noise)
+        CFCtruth[1,3]=CFCtruth[0,2]=CFCtruth[1,2]=CFCtruth[2,3]=1
     elif model == 'ctrnn':
         lag=1
         p=4

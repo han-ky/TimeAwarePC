@@ -4,7 +4,7 @@ from scipy.spatial.distance import cdist
 from dcor.independence import distance_covariance_test
 from timeawarepc import simulate_data
 
-def i_test_cond_ball_div_uncond_dist_cov(data, A, B, S, niter=500):
+def i_test_cond_ball_div_uncond_dist_cov(data, A, B, S, niter=50, **kwargs):
     if len(S) == 0:
         return distance_covariance_test(data[:, A], data[:, B], num_resamples=niter).pvalue
     return ci_test_ball_div(data, A, B, S, niter=niter)
